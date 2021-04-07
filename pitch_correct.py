@@ -1,3 +1,4 @@
+import copy
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -11,17 +12,21 @@ signal, fs = librosa.load('./wav/'+sys.argv[1]+'.wav')
 f0, voiced_flag, voiced_probs = librosa.pyin(signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
 times = librosa.times_like(f0)
 D = librosa.amplitude_to_db(np.abs(librosa.stft(signal)), ref=np.max)
-fig, ax = plt.subplots()
-img = librosa.display.specshow(D, x_axis='time', y_axis='log', ax=ax)
-ax.set(title='pYIN')
-fig.colorbar(img, ax=ax, format="%+2.f dB")
-ax.plot(times, f0, label='f0', color='cyan', linewidth=3)
-ax.legend(loc='upper right')
-plt.show()
 
 # get closest fundamental frequencies that belongs to scale
-# TODO: change this to take in a scale and find closest frequency
-f_target = f0
+f_target = copy.copy(f0)
+f_target[np.isnan(f0)] = 1 # all elements must be integers and non-zero to prevent division by zero
+f_target = librosa.note_to_hz(librosa.hz_to_note(f_target))
+
+# plot the frequencies
+fig, ax = plt.subplots()
+img = librosa.display.specshow(D, x_axis='time', y_axis='log', ax=ax)
+ax.set(title='['+sys.argv[1]+'] Original vs Pitch Corrected')
+fig.colorbar(img, ax=ax, format="%+2.f dB")
+ax.plot(times, f0, label='f0', color='cyan', linewidth=3)
+ax.plot(times, f_target, label='ftarget', color='blue', linewidth=1)
+ax.legend(loc='upper right')
+plt.show()
 
 # use PSOLA to move to desired fundamental frequency
 signal_length = signal.shape[-1]
