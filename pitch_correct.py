@@ -61,7 +61,6 @@ def getTargetFreqs(f0, key=None):
         possible_freqs = np.concatenate((possible_freqs, octave_freqs), axis=None)
     for i, freq in enumerate(f_target):
         f_target[i] = findClosestFreq(freq, possible_freqs)
-    f_target[np.isnan(f_target)] = 0 # prevents audio from getting cut off
     return f_target
 
 
@@ -89,10 +88,11 @@ def main():
     ax.set(title='['+sys.argv[1]+'] Original vs Target')
     fig.colorbar(img, ax=ax, format="%+2.f dB")
     ax.plot(times, f0, label='f0', color='cyan', linewidth=3)
+    f_target[f_target < 65.41] = np.nan # removes the ftarget rise/drop at beginning/end
     ax.plot(times, f_target, label='ftarget', color='blue', linewidth=1)
     ax.legend(loc='upper right')
     plt.show()
-
+    f_target[np.isnan(f_target)] = 0 # prevents audio from getting cut off
     # use PSOLA to move to desired target frequency
     signal_pitch_corrected = tsm.tdpsola(signal, fs, f0, tgt_f0=f_target, p_hop_size=512, p_win_size=1024)
 
