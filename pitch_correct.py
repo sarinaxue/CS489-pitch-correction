@@ -56,7 +56,7 @@ def getTargetFreqs(f0, key=None):
     octave_freqs[0] /= 2 # strangely, the first note is actually in the next octave, so bring it back down
     possible_freqs = []
     possible_freqs = copy.copy(octave_freqs)
-    for x in range(6):
+    for _x in range(6):
         octave_freqs *= 2
         possible_freqs = np.concatenate((possible_freqs, octave_freqs), axis=None)
     for i, freq in enumerate(f_target):
@@ -64,14 +64,25 @@ def getTargetFreqs(f0, key=None):
     return f_target
 
 
+# CLI arguments:
+# string - name of audio file
+# string (optional) - key to correct to
+# string (optional) - if 1, use hpss to remove transients before correcting
 def main():
-    # detect original fundamental frequencies with pYIN
-    signal, fs = librosa.load('./wav/'+sys.argv[1]+'.wav')
-    f0, voiced_flag, voiced_probs = librosa.pyin(signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
-    times = librosa.times_like(f0)
-    D = librosa.amplitude_to_db(np.abs(librosa.stft(signal)), ref=np.max)
+    y, fs = librosa.load('./wav/'+sys.argv[1]+'.wav')
+    signal = y
+    use_hpss = False
+    if len(sys.argv) >= 4:
+        if (sys.argv[3] == '1'):
+            use_hpss = True
+            signal_harmonic, signal_percussive = librosa.effects.hpss(y)
+            signal = signal_harmonic
+    
+    # PITCH DETECTION: detect original fundamental frequencies with pYIN
+    f0, _voiced_flag, _voiced_probs = librosa.pyin(signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
 
     # check if key was passed as an argument
+    key = None
     if len(sys.argv) >= 3:
         if sys.argv[2] == 'estimate':
             key = estimateKey(signal, fs)
@@ -81,9 +92,12 @@ def main():
         f_target = getTargetFreqs(f0, key)
     else:
         f_target = getTargetFreqs(f0)
-    print(f_target)
+    # print(f_target)
+
     # plot the original and target frequencies
     fig, ax = plt.subplots()
+    times = librosa.times_like(f0)
+    D = librosa.amplitude_to_db(np.abs(librosa.stft(y)), ref=np.max)
     img = librosa.display.specshow(D, x_axis='time', y_axis='log', ax=ax)
     ax.set(title='['+sys.argv[1]+'] Original vs Target')
     fig.colorbar(img, ax=ax, format="%+2.f dB")
@@ -92,11 +106,20 @@ def main():
     ax.plot(times, f_target, label='ftarget', color='blue', linewidth=1)
     ax.legend(loc='upper right')
     plt.show()
+    
+    # PITCH CORRECTION: use PSOLA to move to desired target frequency
     f_target[np.isnan(f_target)] = 0 # prevents audio from getting cut off
-    # use PSOLA to move to desired target frequency
     signal_pitch_corrected = tsm.tdpsola(signal, fs, f0, tgt_f0=f_target, p_hop_size=512, p_win_size=1024)
 
-    sf.write('./wav/'+sys.argv[1]+'_pitch_corrected.wav', signal_pitch_corrected, fs)
+    filename = './wav/'+sys.argv[1]+'_pitch_corrected'
+    if (key != None):
+        filename += '_' + key.replace(':','')
+    if (use_hpss == 1):
+        signal_pitch_corrected = signal_pitch_corrected + signal_percussive # add back percussive component
+        filename += '_hpss'
+    filename += '.wav'
+    sf.write(filename, signal_pitch_corrected, fs)
+    print('File saved to ' + filename)
 
 if __name__ == "__main__":
     main()
