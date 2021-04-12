@@ -50,9 +50,10 @@ def estimateKey(signal, fs):
 def getTargetFreqs(f0, key=None):
     f_target = copy.copy(f0)
     f_target[np.isnan(f0)] = 1 # all elements must be integers and non-zero to prevent division by zero
-    if key == None:
+    try:
+        octave_freqs = librosa.note_to_hz(map(lambda note: note + '2', librosa.key_to_notes(key))) 
+    except:
         return librosa.note_to_hz(librosa.hz_to_note(f_target))
-    octave_freqs = librosa.note_to_hz(map(lambda note: note + '2', librosa.key_to_notes(key))) 
     octave_freqs[0] /= 2 # strangely, the first note is actually in the next octave, so bring it back down
     possible_freqs = []
     possible_freqs = copy.copy(octave_freqs)
@@ -75,7 +76,9 @@ def main():
     if len(sys.argv) >= 4:
         if (sys.argv[3] == '1'):
             use_hpss = True
-            signal_harmonic, signal_percussive = librosa.effects.hpss(y)
+            # D = librosa.stft(y, dtype='float32')
+            signal_harmonic, signal_percussive = librosa.effects.hpss(y, margin=(1,3), kernel_size=17)
+            signal_residual = y - signal_harmonic - signal_percussive
             signal = signal_harmonic
     
     # PITCH DETECTION: detect original fundamental frequencies with pYIN
@@ -115,7 +118,7 @@ def main():
     if (key != None):
         filename += '_' + key.replace(':','')
     if (use_hpss == 1):
-        signal_pitch_corrected = signal_pitch_corrected + signal_percussive # add back percussive component
+        signal_pitch_corrected = signal_pitch_corrected + signal_percussive + signal_residual # add back percussive component
         filename += '_hpss'
     filename += '.wav'
     sf.write(filename, signal_pitch_corrected, fs)
