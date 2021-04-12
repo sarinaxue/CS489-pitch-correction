@@ -46,22 +46,22 @@ def estimateKey(signal, fs):
         key+=':maj' # most songs are major, so default to major if equal amount
     return key
 
-
+# get all frequencies in the scale from C2 to C7
 def getTargetFreqs(f0, key):
     f_target = copy.copy(f0)
     f_target[np.isnan(f0)] = 1 # all elements must be integers and non-zero to prevent division by zero
-    possible_freqs_first_octave = librosa.note_to_hz(librosa.key_to_notes(key))
-    # get frequencies in C2 to C7
+    octave_freqs = librosa.note_to_hz(map(lambda note: note + '2', librosa.key_to_notes(key))) 
+    octave_freqs[0] /= 2 # strangely, the first note is actually in the next octave, so bring it back down
     possible_freqs = []
-    octave_freqs = possible_freqs_first_octave*4
     possible_freqs = copy.copy(octave_freqs)
     for x in range(6):
-        octave_freqs *=2
-        possible_freqs= np.concatenate((possible_freqs, octave_freqs), axis=None)
+        octave_freqs *= 2
+        possible_freqs = np.concatenate((possible_freqs, octave_freqs), axis=None)
     for i, freq in enumerate(f_target):
         f_target[i] = findClosestFreq(freq, possible_freqs)
     f_target[np.isnan(f_target)] = 0 # prevents audio from getting cut off
     return f_target
+
 
 def main():
     # detect original fundamental frequencies with pYIN
@@ -69,7 +69,11 @@ def main():
     f0, voiced_flag, voiced_probs = librosa.pyin(signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
     times = librosa.times_like(f0)
     D = librosa.amplitude_to_db(np.abs(librosa.stft(signal)), ref=np.max)
-    key = estimateKey(signal, fs)
+    # check if key was passed as an argument
+    if len(sys.argv) >= 3:
+        key = sys.argv[2]
+    else:
+        key = estimateKey(signal, fs)
     print("Pitch correcting to: "+key+ " key")
     f_target = getTargetFreqs(f0, key)
 
