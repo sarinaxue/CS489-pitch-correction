@@ -47,9 +47,11 @@ def estimateKey(signal, fs):
     return key
 
 # get all frequencies in the scale from C2 to C7
-def getTargetFreqs(f0, key):
+def getTargetFreqs(f0, key=None):
     f_target = copy.copy(f0)
     f_target[np.isnan(f0)] = 1 # all elements must be integers and non-zero to prevent division by zero
+    if key == None:
+        return librosa.note_to_hz(librosa.hz_to_note(f_target))
     octave_freqs = librosa.note_to_hz(map(lambda note: note + '2', librosa.key_to_notes(key))) 
     octave_freqs[0] /= 2 # strangely, the first note is actually in the next octave, so bring it back down
     possible_freqs = []
@@ -69,21 +71,24 @@ def main():
     f0, voiced_flag, voiced_probs = librosa.pyin(signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
     times = librosa.times_like(f0)
     D = librosa.amplitude_to_db(np.abs(librosa.stft(signal)), ref=np.max)
+
     # check if key was passed as an argument
     if len(sys.argv) >= 3:
-        key = sys.argv[2]
+        if sys.argv[2] == 'estimate':
+            key = estimateKey(signal, fs)
+        else:
+            key = sys.argv[2]
+        print("Pitch correcting to: " + key + " key")
+        f_target = getTargetFreqs(f0, key)
     else:
-        key = estimateKey(signal, fs)
-    print("Pitch correcting to: "+key+ " key")
-    f_target = getTargetFreqs(f0, key)
-
+        f_target = getTargetFreqs(f0)
+    print(f_target)
     # plot the original and target frequencies
     fig, ax = plt.subplots()
     img = librosa.display.specshow(D, x_axis='time', y_axis='log', ax=ax)
     ax.set(title='['+sys.argv[1]+'] Original vs Target')
     fig.colorbar(img, ax=ax, format="%+2.f dB")
     ax.plot(times, f0, label='f0', color='cyan', linewidth=3)
-    f_target[f_target < 1.03] = np.nan # removes the ftarget rise/drop at beginning/end
     ax.plot(times, f_target, label='ftarget', color='blue', linewidth=1)
     ax.legend(loc='upper right')
     plt.show()
