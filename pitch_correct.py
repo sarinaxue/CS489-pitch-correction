@@ -76,10 +76,8 @@ def main():
     if len(sys.argv) >= 4:
         if (sys.argv[3] == '1'):
             use_hpss = True
-            # D = librosa.stft(y, dtype='float32')
-            signal_harmonic, signal_percussive = librosa.effects.hpss(y, margin=(1,3), kernel_size=17)
-            signal_residual = y - signal_harmonic - signal_percussive
-            signal = signal_harmonic
+            signal_harmonic, _signal_percussive = librosa.effects.hpss(y, margin=(1,3), kernel_size=17)
+            signal = signal_harmonic # use only harmonic component in key estimation /pitch detection/pitch correction
     
     # PITCH DETECTION: detect original fundamental frequencies with pYIN
     f0, _voiced_flag, _voiced_probs = librosa.pyin(signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
@@ -112,13 +110,12 @@ def main():
     
     # PITCH CORRECTION: use PSOLA to move to desired target frequency
     f_target[np.isnan(f_target)] = 0 # prevents audio from getting cut off
-    signal_pitch_corrected = tsm.tdpsola(signal, fs, f0, tgt_f0=f_target, p_hop_size=512, p_win_size=1024)
+    signal_pitch_corrected = tsm.tdpsola(y, fs, f0, tgt_f0=f_target, p_hop_size=512, p_win_size=1024)
 
     filename = './wav/'+sys.argv[1]+'_pitch_corrected'
     if (key != None):
         filename += '_' + key.replace(':','')
     if (use_hpss == 1):
-        signal_pitch_corrected = signal_pitch_corrected + signal_percussive + signal_residual # add back percussive component
         filename += '_hpss'
     filename += '.wav'
     sf.write(filename, signal_pitch_corrected, fs)
